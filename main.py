@@ -1,13 +1,16 @@
 properties = [
     "InstanceId",
     "Tag)Name",
-    "InstanceType",
     "InstanceState",
     "LaunchTime",
-    "KeyPair",
+    "InstanceType",
+    "PlatformType",
+    "VolumeId",
+    "VolumeSize(Gib)",
+    "VpcId",
     "VpcName",
     "SubnetId",
-    "VpcId",
+    "KeyPair",
     "PrivateIpAddress",
     "PublicIpAddress",
     "Tag)Service",
@@ -23,6 +26,7 @@ properties = [
 def get_ec2_instances(account_name):
     import boto3
     import json
+    from datetime import datetime
 
     boto3.setup_default_session(profile_name=f"{account_name}", region_name='ap-northeast-2')
     ec2_client = boto3.client('ec2')
@@ -40,20 +44,33 @@ def get_ec2_instances(account_name):
             if vpc_tag['Key'] == 'Name':
                 return vpc_tag['Value']
 
+    def get_ebs_size(ebs_id):
+        if not ebs_id:
+            return
+        return ec2_client.describe_volumes(VolumeIds=[ebs_id]).get('Volumes', [])[0].get('Size', '')
+
     instances_info = []
     for instance in ec2_client.describe_instances()["Reservations"]:
         instance = instance["Instances"][0]
+
+        if instance["State"]["Name"] != 'running':
+            continue
+        ebs_id = instance.get('BlockDeviceMappings', [])[0].get('Ebs', '').get('VolumeId', '')
+        vpc_id = instance.get("VpcId", "")
         instance_tags = get_refined_instance_tags(instance['Tags'])
         instances_info.append([
             instance["InstanceId"],
             instance_tags.pop("Name", ""),
-            instance["InstanceType"],
             instance["State"]["Name"],
-            instance["LaunchTime"],
-            instance.get("KeyName", ""),
-            get_vpc_name(instance.get("VpcId", "")),
+            instance["LaunchTime"].strftime("%m/%d/%Y, %H:%M:%S"),
+            instance["InstanceType"],
+            instance.get('PlatformDetails', ''),
+            ebs_id,
+            get_ebs_size(ebs_id),
+            vpc_id,
+            get_vpc_name(vpc_id),
             instance.get("SubnetId", ""),
-            instance.get("VpcId", ""),
+            instance.get("KeyName", ""),
             instance.get("PrivateIpAddress", ""),
             instance.get("PublicIpAddress", ""),
             instance_tags.pop("Service", ""),
@@ -93,8 +110,10 @@ def write_to_xlsx(account_name):
                 worksheet.write_url(i + 1, j,
                                     f'https://ap-northeast-2.console.aws.amazon.com/ec2/v2/home?region=ap-northeast-2#InstanceDetails:instanceId={instances_info[i][j]}',
                                     string=instances_info[i][j])
-            # elif j == 4:
-            #     worksheet.write_datetime(i + 1, j, instances_info[i][j])
+            elif j == 6:
+                worksheet.write_url(i + 1, j,
+                                    f'https://ap-northeast-2.console.aws.amazon.com/ec2/v2/home?region=ap-northeast-2#VolumeDetails:volumeId={instances_info[i][j]}',
+                                    string=instances_info[i][j])
             elif j == 8:
                 worksheet.write_url(i + 1, j,
                                     f'https://ap-northeast-2.console.aws.amazon.com/vpc/home?region=ap-northeast-2#VpcDetails:VpcId={instances_info[i][j]}',
