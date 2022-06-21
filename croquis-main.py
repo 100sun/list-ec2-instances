@@ -126,6 +126,6 @@ def write_to_xlsx(account_name):
 
 if __name__ == "__main__":
     accounts = ["croquis-main", "zigzag-main", "zigzag-alpha"]
-    write_to_xlsx(accounts[0])
-    # write_to_xlsx(accounts[1])
+    # write_to_xlsx(accounts[0])
+    write_to_xlsx(accounts[1])
     # write_to_xlsx(accounts[2])
